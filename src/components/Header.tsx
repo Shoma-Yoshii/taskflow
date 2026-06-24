@@ -1,8 +1,8 @@
-import { LayoutGrid, GanttChart, Plus } from 'lucide-react'
+import { LayoutGrid, GanttChart, Plus, UserPlus } from 'lucide-react'
 import { useStore } from '../store'
 
 export default function Header() {
-  const { view, setView, setAddingStatus } = useStore()
+  const { view, setView, setAddingStatus, setAddingUser } = useStore()
 
   return (
     <header
@@ -26,6 +26,26 @@ export default function Header() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          onClick={() => setAddingUser(true)}
+          title="担当者を追加"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '5px 12px',
+            borderRadius: 7,
+            border: '1px solid #1F3245',
+            background: 'transparent',
+            color: '#7A96B8',
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          <UserPlus size={13} />
+          担当者追加
+        </button>
+
         <button
           onClick={() => setAddingStatus('todo')}
           style={{

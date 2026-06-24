@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Task, Tag, User, TaskStatus, ViewMode, FilterMode } from '../types'
+import type { Task, Tag, User, TaskStatus, ViewMode, FilterMode, Toast } from '../types'
 import { seedTasks, seedTags, seedUsers } from '../data/seed'
+import { nanoid } from '../lib/utils'
 
 interface AppState {
   tasks: Record<string, Task>
@@ -9,22 +10,29 @@ interface AppState {
   users: Record<string, User>
   view: ViewMode
   selectedTaskId: string | null
-  addingStatus: TaskStatus | null   // which column's + was clicked
+  addingStatus: TaskStatus | null
+  addingUser: boolean
   filterTagIds: string[]
   filterMode: FilterMode
   filterAssigneeIds: string[]
+  toasts: Toast[]
 
   setView: (v: ViewMode) => void
   selectTask: (id: string | null) => void
   setAddingStatus: (s: TaskStatus | null) => void
+  setAddingUser: (v: boolean) => void
   toggleFilterTag: (id: string) => void
   setFilterMode: (m: FilterMode) => void
   toggleFilterAssignee: (id: string) => void
   clearFilters: () => void
+  addToast: (message: string, type?: Toast['type']) => void
+  removeToast: (id: string) => void
 
   updateTask: (id: string, updates: Partial<Task>) => void
   moveTask: (id: string, status: TaskStatus) => void
   addTask: (task: Task) => void
+  deleteTask: (id: string) => void
+  addUser: (user: User) => void
 }
 
 const toMap = <T extends { id: string }>(arr: T[]): Record<string, T> =>
@@ -39,13 +47,16 @@ export const useStore = create<AppState>()(
       view: 'kanban',
       selectedTaskId: null,
       addingStatus: null,
+      addingUser: false,
       filterTagIds: [],
       filterMode: 'OR',
       filterAssigneeIds: [],
+      toasts: [],
 
       setView: (view) => set({ view }),
       selectTask: (id) => set({ selectedTaskId: id }),
       setAddingStatus: (addingStatus) => set({ addingStatus }),
+      setAddingUser: (addingUser) => set({ addingUser }),
 
       toggleFilterTag: (id) =>
         set((s) => ({
@@ -64,6 +75,14 @@ export const useStore = create<AppState>()(
         })),
 
       clearFilters: () => set({ filterTagIds: [], filterAssigneeIds: [] }),
+
+      addToast: (message, type = 'info') =>
+        set((s) => ({
+          toasts: [...s.toasts, { id: nanoid(), message, type }],
+        })),
+
+      removeToast: (id) =>
+        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
       updateTask: (id, updates) =>
         set((s) => ({
@@ -90,10 +109,68 @@ export const useStore = create<AppState>()(
               childIds: [...tasks[task.parentId].childIds, task.id],
             }
           }
-          return { tasks }
+          return {
+            tasks,
+            toasts: [
+              ...s.toasts,
+              { id: nanoid(), message: 'タスクを追加しました', type: 'success' as const },
+            ],
+          }
         }),
+
+      deleteTask: (id) =>
+        set((s) => {
+          const task = s.tasks[id]
+          if (!task) return s
+          const newTasks = { ...s.tasks }
+
+          const toDelete = new Set<string>()
+          const collect = (tid: string) => {
+            toDelete.add(tid)
+            ;(newTasks[tid]?.childIds ?? []).forEach(collect)
+          }
+          collect(id)
+
+          if (task.parentId && newTasks[task.parentId]) {
+            newTasks[task.parentId] = {
+              ...newTasks[task.parentId],
+              childIds: newTasks[task.parentId].childIds.filter((cid) => !toDelete.has(cid)),
+            }
+          }
+
+          toDelete.forEach((tid) => delete newTasks[tid])
+
+          return {
+            tasks: newTasks,
+            selectedTaskId: toDelete.has(s.selectedTaskId ?? '') ? null : s.selectedTaskId,
+            toasts: [
+              ...s.toasts,
+              { id: nanoid(), message: 'タスクを削除しました', type: 'danger' as const },
+            ],
+          }
+        }),
+
+      addUser: (user) =>
+        set((s) => ({
+          users: { ...s.users, [user.id]: user },
+          toasts: [
+            ...s.toasts,
+            { id: nanoid(), message: `${user.name} を追加しました`, type: 'success' as const },
+          ],
+        })),
     }),
-    { name: 'taskflow-v1' }
+    {
+      name: 'taskflow-v1',
+      partialize: (s) => ({
+        tasks: s.tasks,
+        tags: s.tags,
+        users: s.users,
+        view: s.view,
+        filterTagIds: s.filterTagIds,
+        filterMode: s.filterMode,
+        filterAssigneeIds: s.filterAssigneeIds,
+      }),
+    }
   )
 )
 

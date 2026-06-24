@@ -5,9 +5,11 @@ import KanbanView from './components/KanbanView'
 import GanttView from './components/GanttView'
 import TaskDetail from './components/TaskDetail'
 import AddTaskModal from './components/AddTaskModal'
+import AddUserModal from './components/AddUserModal'
+import Toast from './components/Toast'
 
 export default function App() {
-  const { view, selectedTaskId, addingStatus } = useStore()
+  const { view, selectedTaskId, addingStatus, addingUser } = useStore()
 
   return (
     <div
@@ -26,6 +28,8 @@ export default function App() {
       </div>
       {selectedTaskId && <TaskDetail />}
       {addingStatus !== null && <AddTaskModal />}
+      {addingUser && <AddUserModal />}
+      <Toast />
     </div>
   )
 }

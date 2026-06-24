@@ -19,6 +19,7 @@ export default function AddTaskModal() {
   const [startDate, setStartDate] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [parentId, setParentId] = useState<string>('')
+  const [hasParent, setHasParent] = useState(false)
 
   if (!addingStatus && addingStatus !== 'todo') return null
 
@@ -287,29 +288,69 @@ export default function AddTaskModal() {
             </div>
           )}
 
-          {section('親タスク（任意）',
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              style={{
-                background: '#172130',
-                border: '1px solid #1F3245',
-                borderRadius: 6,
-                padding: '5px 10px',
-                color: parentId ? '#D0DCF0' : '#3A5070',
-                fontSize: 12,
-                outline: 'none',
-                width: '100%',
-                fontFamily: 'inherit',
-              }}
-            >
-              <option value="">なし（ルートタスク）</option>
-              {parentOptions.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {'　'.repeat(t.depth)}{t.title}
-                </option>
-              ))}
-            </select>
+          {section('タスクの種類',
+            <div>
+              {/* Toggle */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: hasParent ? 10 : 0 }}>
+                <button
+                  onClick={() => { setHasParent(false); setParentId('') }}
+                  style={{
+                    flex: 1,
+                    padding: '7px 0',
+                    borderRadius: 6,
+                    border: !hasParent ? '1px solid #4898F244' : '1px solid #1F3245',
+                    background: !hasParent ? '#4898F21A' : 'transparent',
+                    color: !hasParent ? '#4898F2' : '#7A96B8',
+                    fontSize: 12,
+                    fontWeight: !hasParent ? 600 : 400,
+                    cursor: 'pointer',
+                  }}
+                >
+                  ルートタスク（親なし）
+                </button>
+                <button
+                  onClick={() => setHasParent(true)}
+                  style={{
+                    flex: 1,
+                    padding: '7px 0',
+                    borderRadius: 6,
+                    border: hasParent ? '1px solid #9B72F044' : '1px solid #1F3245',
+                    background: hasParent ? '#9B72F01A' : 'transparent',
+                    color: hasParent ? '#9B72F0' : '#7A96B8',
+                    fontSize: 12,
+                    fontWeight: hasParent ? 600 : 400,
+                    cursor: 'pointer',
+                  }}
+                >
+                  既存タスクの子にする
+                </button>
+              </div>
+              {/* Parent select */}
+              {hasParent && (
+                <select
+                  value={parentId}
+                  onChange={(e) => setParentId(e.target.value)}
+                  style={{
+                    background: '#172130',
+                    border: '1px solid #1F3245',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    color: parentId ? '#D0DCF0' : '#3A5070',
+                    fontSize: 12,
+                    outline: 'none',
+                    width: '100%',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <option value="">— 親タスクを選択 —</option>
+                  {parentOptions.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {'　'.repeat(t.depth)}{t.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           )}
         </div>
 

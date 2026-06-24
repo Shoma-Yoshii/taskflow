@@ -1,4 +1,5 @@
-import { X, Calendar, AlertCircle } from 'lucide-react'
+import { useState } from 'react'
+import { X, Calendar, AlertCircle, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
 import type { Task, TaskStatus, Priority } from '../types'
 import { PRIORITY_COLOR, STATUS_LABEL, STATUS_COLOR, fmtDate, isOverdue } from '../lib/utils'
@@ -42,8 +43,9 @@ function Selector<T extends string>({
 }
 
 export default function TaskDetail() {
-  const { selectedTaskId, tasks, tags, users, selectTask, updateTask } = useStore()
+  const { selectedTaskId, tasks, tags, users, selectTask, updateTask, deleteTask } = useStore()
   const task: Task | null = selectedTaskId ? tasks[selectedTaskId] ?? null : null
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   if (!task) return null
 
@@ -320,6 +322,87 @@ export default function TaskDetail() {
               </div>
             </div>
           )}
+
+          {/* Delete */}
+          <div style={{ padding: '16px 0 4px' }}>
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: 'none',
+                  border: '1px solid #1F3245',
+                  borderRadius: 6,
+                  color: '#3A5070',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  padding: '5px 12px',
+                  transition: 'all 0.12s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#E3423B44'
+                  e.currentTarget.style.color = '#E3423B'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#1F3245'
+                  e.currentTarget.style.color = '#3A5070'
+                }}
+              >
+                <Trash2 size={12} />
+                このタスクを削除
+                {children.length > 0 && (
+                  <span style={{ fontSize: 10, color: '#E07830' }}>（子タスク {children.length} 件も削除）</span>
+                )}
+              </button>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #E3423B44',
+                  background: '#E3423B0D',
+                }}
+              >
+                <span style={{ fontSize: 12, color: '#D0DCF0', flex: 1 }}>
+                  本当に削除しますか？{children.length > 0 && `（子タスク ${children.length} 件も削除されます）`}
+                </span>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 5,
+                    border: '1px solid #1F3245',
+                    background: 'transparent',
+                    color: '#7A96B8',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => deleteTask(task.id)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 5,
+                    border: 'none',
+                    background: '#E3423B',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  削除する
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

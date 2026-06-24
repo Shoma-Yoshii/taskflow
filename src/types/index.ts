@@ -33,3 +33,9 @@ export interface User {
   initials: string
   avatarColor: string
 }
+
+export interface Toast {
+  id: string
+  message: string
+  type: 'success' | 'info' | 'warning' | 'danger'
+}

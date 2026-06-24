@@ -20,8 +20,13 @@ const COLUMNS: { status: TaskStatus; label: string }[] = [
   { status: 'done', label: 'Done' },
 ]
 
-function Column({ status, label, tasks }: { status: TaskStatus; label: string; tasks: Task[] }) {
+function Column({
+  status, label, tasks,
+}: {
+  status: TaskStatus; label: string; tasks: Task[]
+}) {
   const { isOver, setNodeRef } = useDroppable({ id: status })
+  const { setAddingStatus } = useStore()
   const color = STATUS_COLOR[status]
 
   return (
@@ -35,29 +40,35 @@ function Column({ status, label, tasks }: { status: TaskStatus; label: string; t
           padding: '0 2px',
         }}
       >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color,
-          }}
-        >
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color }}>
           {label}
         </span>
-        <span
-          style={{
-            fontSize: 10,
-            color: '#3A5070',
-            background: '#1D2A3C',
-            padding: '1px 6px',
-            borderRadius: 10,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {tasks.length}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: '#3A5070', background: '#1D2A3C', padding: '1px 6px', borderRadius: 10, fontVariantNumeric: 'tabular-nums' }}>
+            {tasks.length}
+          </span>
+          <button
+            onClick={() => setAddingStatus(status)}
+            title={`${label}にタスクを追加`}
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 5,
+              border: '1px solid #1F3245',
+              background: 'transparent',
+              color: '#3A5070',
+              fontSize: 14,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+              padding: 0,
+            }}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       <div
@@ -84,14 +95,14 @@ function Column({ status, label, tasks }: { status: TaskStatus; label: string; t
 }
 
 export default function KanbanView() {
-  const { tasks, filterTagIds, filterMode, moveTask } = useStore()
+  const { tasks, filterTagIds, filterMode, filterAssigneeIds, moveTask } = useStore()
   const [activeTask, setActiveTask] = useState<Task | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  const visible = getFilteredTasks(tasks, filterTagIds, filterMode)
+  const visible = getFilteredTasks(tasks, filterTagIds, filterMode, filterAssigneeIds)
 
   const byStatus = (status: TaskStatus) =>
     Object.values(tasks).filter((t) => t.status === status && visible.has(t.id))

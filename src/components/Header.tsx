@@ -1,8 +1,8 @@
-import { LayoutGrid, GanttChart } from 'lucide-react'
+import { LayoutGrid, GanttChart, Plus } from 'lucide-react'
 import { useStore } from '../store'
 
 export default function Header() {
-  const { view, setView } = useStore()
+  const { view, setView, setAddingStatus } = useStore()
 
   return (
     <header
@@ -24,6 +24,27 @@ export default function Header() {
         <span style={{ color: '#1F3245' }}>|</span>
         <span style={{ fontSize: 14, fontWeight: 600, color: '#D0DCF0' }}>推進タスク管理</span>
       </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          onClick={() => setAddingStatus('todo')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '5px 14px',
+            borderRadius: 7,
+            border: 'none',
+            background: '#4898F2',
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <Plus size={13} />
+          タスク追加
+        </button>
 
       <div
         style={{
@@ -61,6 +82,7 @@ export default function Header() {
             {label}
           </button>
         ))}
+      </div>
       </div>
     </header>
   )

@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default function TaskCard({ task, ghost }: Props) {
-  const { tags, tasks, selectTask } = useStore()
+  const { tags, tasks, users, selectTask } = useStore()
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id })
 
   const style = transform
@@ -18,6 +18,7 @@ export default function TaskCard({ task, ghost }: Props) {
     : undefined
 
   const taskTags = task.tagIds.map((id) => tags[id]).filter(Boolean)
+  const taskUsers = task.assigneeIds.map((id) => users[id]).filter(Boolean)
   const { done, total } = childProgress(task, tasks)
   const parent = task.parentId ? tasks[task.parentId] : null
   const overdue = isOverdue(task)
@@ -117,6 +118,40 @@ export default function TaskCard({ task, ghost }: Props) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Assignees */}
+          {taskUsers.map((u) => (
+            <span
+              key={u.id}
+              title={u.name}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: 10,
+                color: u.avatarColor,
+                fontWeight: 500,
+              }}
+            >
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  background: u.avatarColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 8,
+                  fontWeight: 700,
+                  color: '#fff',
+                  flexShrink: 0,
+                }}
+              >
+                {u.initials}
+              </span>
+              {u.name}
+            </span>
+          ))}
           {task.dueDate && (
             <span
               style={{

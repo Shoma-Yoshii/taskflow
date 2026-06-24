@@ -4,9 +4,10 @@ import FilterBar from './components/FilterBar'
 import KanbanView from './components/KanbanView'
 import GanttView from './components/GanttView'
 import TaskDetail from './components/TaskDetail'
+import AddTaskModal from './components/AddTaskModal'
 
 export default function App() {
-  const { view, selectedTaskId } = useStore()
+  const { view, selectedTaskId, addingStatus } = useStore()
 
   return (
     <div
@@ -24,6 +25,7 @@ export default function App() {
         {view === 'kanban' ? <KanbanView /> : <GanttView />}
       </div>
       {selectedTaskId && <TaskDetail />}
+      {addingStatus !== null && <AddTaskModal />}
     </div>
   )
 }

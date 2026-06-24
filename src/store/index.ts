@@ -9,13 +9,18 @@ interface AppState {
   users: Record<string, User>
   view: ViewMode
   selectedTaskId: string | null
+  addingStatus: TaskStatus | null   // which column's + was clicked
   filterTagIds: string[]
   filterMode: FilterMode
+  filterAssigneeIds: string[]
 
   setView: (v: ViewMode) => void
   selectTask: (id: string | null) => void
+  setAddingStatus: (s: TaskStatus | null) => void
   toggleFilterTag: (id: string) => void
   setFilterMode: (m: FilterMode) => void
+  toggleFilterAssignee: (id: string) => void
+  clearFilters: () => void
 
   updateTask: (id: string, updates: Partial<Task>) => void
   moveTask: (id: string, status: TaskStatus) => void
@@ -33,11 +38,14 @@ export const useStore = create<AppState>()(
       users: toMap(seedUsers),
       view: 'kanban',
       selectedTaskId: null,
+      addingStatus: null,
       filterTagIds: [],
       filterMode: 'OR',
+      filterAssigneeIds: [],
 
       setView: (view) => set({ view }),
       selectTask: (id) => set({ selectedTaskId: id }),
+      setAddingStatus: (addingStatus) => set({ addingStatus }),
 
       toggleFilterTag: (id) =>
         set((s) => ({
@@ -47,6 +55,15 @@ export const useStore = create<AppState>()(
         })),
 
       setFilterMode: (filterMode) => set({ filterMode }),
+
+      toggleFilterAssignee: (id) =>
+        set((s) => ({
+          filterAssigneeIds: s.filterAssigneeIds.includes(id)
+            ? s.filterAssigneeIds.filter((a) => a !== id)
+            : [...s.filterAssigneeIds, id],
+        })),
+
+      clearFilters: () => set({ filterTagIds: [], filterAssigneeIds: [] }),
 
       updateTask: (id, updates) =>
         set((s) => ({
@@ -82,30 +99,28 @@ export const useStore = create<AppState>()(
 
 // ── Selectors ──────────────────────────────────────────────
 
-export function getTaskProgress(taskId: string, tasks: Record<string, Task>): number {
-  const task = tasks[taskId]
-  if (!task) return 0
-  if (task.childIds.length === 0) return task.status === 'done' ? 100 : 0
-  const avg =
-    task.childIds.reduce((sum, cid) => sum + getTaskProgress(cid, tasks), 0) /
-    task.childIds.length
-  return Math.round(avg)
-}
-
 export function getFilteredTasks(
   tasks: Record<string, Task>,
   filterTagIds: string[],
-  filterMode: FilterMode
+  filterMode: FilterMode,
+  filterAssigneeIds: string[]
 ): Set<string> {
   const all = Object.values(tasks)
-  if (filterTagIds.length === 0) return new Set(all.map((t) => t.id))
-  return new Set(
-    all
-      .filter((t) =>
-        filterMode === 'AND'
-          ? filterTagIds.every((tid) => t.tagIds.includes(tid))
-          : filterTagIds.some((tid) => t.tagIds.includes(tid))
-      )
-      .map((t) => t.id)
-  )
+  let filtered = all
+
+  if (filterTagIds.length > 0) {
+    filtered = filtered.filter((t) =>
+      filterMode === 'AND'
+        ? filterTagIds.every((tid) => t.tagIds.includes(tid))
+        : filterTagIds.some((tid) => t.tagIds.includes(tid))
+    )
+  }
+
+  if (filterAssigneeIds.length > 0) {
+    filtered = filtered.filter((t) =>
+      filterAssigneeIds.some((uid) => t.assigneeIds.includes(uid))
+    )
+  }
+
+  return new Set(filtered.map((t) => t.id))
 }

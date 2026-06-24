@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { X, Calendar, AlertCircle, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Calendar, AlertCircle, Trash2, Eye, Edit3 } from 'lucide-react'
+import { marked } from 'marked'
 import { useStore } from '../store'
 import type { Task, TaskStatus, Priority } from '../types'
 import { PRIORITY_COLOR, STATUS_LABEL, STATUS_COLOR, fmtDate, isOverdue } from '../lib/utils'
@@ -46,43 +47,53 @@ export default function TaskDetail() {
   const { selectedTaskId, tasks, tags, users, selectTask, updateTask, deleteTask } = useStore()
   const task: Task | null = selectedTaskId ? tasks[selectedTaskId] ?? null : null
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [descPreview, setDescPreview] = useState(false)
+
+  useEffect(() => {
+    setConfirmDelete(false)
+    setDescPreview(false)
+  }, [selectedTaskId])
 
   if (!task) return null
 
   const taskTags = task.tagIds.map((id) => tags[id]).filter(Boolean)
-  const taskUsers = task.assigneeIds.map((id) => users[id]).filter(Boolean)
   const parent = task.parentId ? tasks[task.parentId] : null
   const children = task.childIds.map((id) => tasks[id]).filter(Boolean)
   const overdue = isOverdue(task)
+  const userList = Object.values(users)
 
   const update = (updates: Partial<Task>) => updateTask(task.id, updates)
+
+  const toggleAssignee = (uid: string) => {
+    const newIds = task.assigneeIds.includes(uid)
+      ? task.assigneeIds.filter((id) => id !== uid)
+      : [...task.assigneeIds, uid]
+    update({ assigneeIds: newIds })
+  }
 
   const row = (label: string, content: React.ReactNode) => (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '80px 1fr',
+        gridTemplateColumns: '72px 1fr',
         gap: 8,
         padding: '8px 0',
         borderBottom: '1px solid #182840',
         alignItems: 'start',
       }}
     >
-      <span style={{ fontSize: 11, color: '#3A5070', paddingTop: 2 }}>{label}</span>
+      <span style={{ fontSize: 11, color: '#3A5070', paddingTop: 3 }}>{label}</span>
       <div>{content}</div>
     </div>
   )
+
+  const markdownHtml = String(marked.parse(task.description ?? ''))
 
   return (
     <>
       {/* Backdrop */}
       <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.35)',
-          zIndex: 40,
-        }}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 40 }}
         onClick={() => selectTask(null)}
       />
 
@@ -93,7 +104,7 @@ export default function TaskDetail() {
           top: 0,
           right: 0,
           bottom: 0,
-          width: 420,
+          width: 440,
           background: '#111B26',
           borderLeft: '1px solid #1F3245',
           zIndex: 50,
@@ -138,14 +149,7 @@ export default function TaskDetail() {
           </div>
           <button
             onClick={() => selectTask(null)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#3A5070',
-              cursor: 'pointer',
-              padding: 2,
-              flexShrink: 0,
-            }}
+            style={{ background: 'none', border: 'none', color: '#3A5070', cursor: 'pointer', padding: 2, flexShrink: 0 }}
           >
             <X size={16} />
           </button>
@@ -188,6 +192,56 @@ export default function TaskDetail() {
             </div>,
           )}
 
+          {/* Assignees — editable */}
+          {row(
+            '担当者',
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {userList.map((u) => {
+                const active = task.assigneeIds.includes(u.id)
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => toggleAssignee(u.id)}
+                    title={active ? `${u.name} を外す` : `${u.name} を追加`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      padding: '3px 9px 3px 5px',
+                      borderRadius: 16,
+                      border: active ? `1px solid ${u.avatarColor}55` : '1px solid #1F3245',
+                      background: active ? `${u.avatarColor}1A` : 'transparent',
+                      color: active ? u.avatarColor : '#3A5070',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: active ? u.avatarColor : '#1D2A3C',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: active ? '#fff' : '#3A5070',
+                        flexShrink: 0,
+                        transition: 'all 0.12s',
+                      }}
+                    >
+                      {u.initials}
+                    </span>
+                    {u.name}
+                  </button>
+                )
+              })}
+            </div>,
+          )}
+
           {taskTags.length > 0 &&
             row(
               'タグ',
@@ -214,53 +268,69 @@ export default function TaskDetail() {
               </div>,
             )}
 
-          {taskUsers.length > 0 &&
-            row(
-              '担当者',
-              <div style={{ display: 'flex', gap: 6 }}>
-                {taskUsers.map((u) => (
-                  <div
-                    key={u.id}
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: '50%',
-                      background: u.avatarColor,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#fff',
-                    }}
-                    title={u.name}
-                  >
-                    {u.initials}
-                  </div>
-                ))}
-              </div>,
-            )}
-
-          {task.description && (
-            <div style={{ padding: '10px 0', borderBottom: '1px solid #182840' }}>
-              <div style={{ fontSize: 10, color: '#3A5070', marginBottom: 6 }}>メモ</div>
-              <p
+          {/* Memo — markdown */}
+          <div style={{ padding: '12px 0', borderBottom: '1px solid #182840' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, color: '#3A5070' }}>メモ</span>
+              <button
+                onClick={() => setDescPreview(!descPreview)}
                 style={{
-                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: 'none',
+                  border: '1px solid #1F3245',
+                  borderRadius: 5,
                   color: '#7A96B8',
-                  lineHeight: 1.65,
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                  padding: '2px 8px',
                 }}
               >
-                {task.description}
-              </p>
+                {descPreview
+                  ? <><Edit3 size={10} /> 編集</>
+                  : <><Eye size={10} /> プレビュー</>
+                }
+              </button>
             </div>
-          )}
 
+            {descPreview ? (
+              task.description ? (
+                <div
+                  className="md-preview"
+                  dangerouslySetInnerHTML={{ __html: markdownHtml }}
+                />
+              ) : (
+                <span style={{ fontSize: 12, color: '#3A5070', fontStyle: 'italic' }}>メモなし</span>
+              )
+            ) : (
+              <textarea
+                value={task.description ?? ''}
+                onChange={(e) => update({ description: e.target.value })}
+                placeholder={'マークダウン形式で記入できます\n\n# 見出し\n- リスト\n**太字** / *斜体*\n`コード`'}
+                rows={5}
+                style={{
+                  width: '100%',
+                  background: '#0C1219',
+                  border: '1px solid #1F3245',
+                  borderRadius: 6,
+                  padding: '8px 10px',
+                  color: '#D0DCF0',
+                  fontSize: 12,
+                  lineHeight: 1.65,
+                  resize: 'vertical',
+                  outline: 'none',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+            )}
+          </div>
+
+          {/* Child tasks */}
           {children.length > 0 && (
-            <div style={{ padding: '10px 0' }}>
-              <div style={{ fontSize: 10, color: '#3A5070', marginBottom: 8 }}>
+            <div style={{ padding: '10px 0', borderBottom: '1px solid #182840' }}>
+              <div style={{ fontSize: 11, color: '#3A5070', marginBottom: 8 }}>
                 子タスク ({children.filter((c) => c.status === 'done').length}/{children.length})
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -281,9 +351,7 @@ export default function TaskDetail() {
                     <div
                       onClick={(e) => {
                         e.stopPropagation()
-                        updateTask(child.id, {
-                          status: child.status === 'done' ? 'todo' : 'done',
-                        })
+                        updateTask(child.id, { status: child.status === 'done' ? 'todo' : 'done' })
                       }}
                       style={{
                         width: 14,
@@ -353,7 +421,7 @@ export default function TaskDetail() {
                 <Trash2 size={12} />
                 このタスクを削除
                 {children.length > 0 && (
-                  <span style={{ fontSize: 10, color: '#E07830' }}>（子タスク {children.length} 件も削除）</span>
+                  <span style={{ fontSize: 10, color: '#E07830' }}>（子 {children.length} 件も削除）</span>
                 )}
               </button>
             ) : (
@@ -369,7 +437,8 @@ export default function TaskDetail() {
                 }}
               >
                 <span style={{ fontSize: 12, color: '#D0DCF0', flex: 1 }}>
-                  本当に削除しますか？{children.length > 0 && `（子タスク ${children.length} 件も削除されます）`}
+                  本当に削除しますか？
+                  {children.length > 0 && <span style={{ color: '#E07830' }}> 子タスク {children.length} 件も消えます</span>}
                 </span>
                 <button
                   onClick={() => setConfirmDelete(false)}

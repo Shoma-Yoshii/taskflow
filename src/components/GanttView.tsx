@@ -1,21 +1,23 @@
-import { useState } from 'react'
-import { ChevronRight, ChevronDown } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { ChevronRight, ChevronDown, GitBranch } from 'lucide-react'
 import { useStore } from '../store'
 import type { Task } from '../types'
 import { STATUS_COLOR, fmtDate } from '../lib/utils'
 
-// ── Date helpers ──────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────
+const DAY_W   = 22    // px per day
+const ROW_H   = 36    // px per row
+const LEFT_W  = 220   // px for task name column
+const HEAD_H  = 48    // px for header
+const DAY_MS  = 86400000
 
-const DAY_MS = 86400000
-
+// ── Helpers ───────────────────────────────────────────────
 function daysBetween(a: Date, b: Date): number {
   return Math.round((b.getTime() - a.getTime()) / DAY_MS)
 }
-
 function addDays(d: Date, n: number): Date {
   return new Date(d.getTime() + n * DAY_MS)
 }
-
 function eachMonth(start: Date, end: Date): Date[] {
   const months: Date[] = []
   let cur = new Date(start.getFullYear(), start.getMonth(), 1)
@@ -26,167 +28,63 @@ function eachMonth(start: Date, end: Date): Date[] {
   return months
 }
 
-// ── Gantt row ─────────────────────────────────────────────
-
-interface RowProps {
-  task: Task
-  rangeStart: Date
-  totalDays: number
-  depth: number
-  collapsed: boolean
-  onToggle: () => void
-  onClick: () => void
-  hasChildren: boolean
-  today: Date
-}
-
-function GanttRow({ task, rangeStart, totalDays, depth, collapsed, onToggle, onClick, hasChildren, today }: RowProps) {
-  const start = task.startDate ? new Date(task.startDate) : null
-  const end = task.dueDate ? new Date(task.dueDate) : null
-
-  let leftPct = 0
-  let widthPct = 0
-
-  if (start && end) {
-    const startOff = Math.max(0, daysBetween(rangeStart, start))
-    const endOff = Math.min(totalDays, daysBetween(rangeStart, end) + 1)
-    leftPct = (startOff / totalDays) * 100
-    widthPct = Math.max(0.3, ((endOff - startOff) / totalDays) * 100)
+// ── Critical path: tasks with ≤1 day slack between dependent pairs ──
+function calcCriticalSet(tasks: Record<string, Task>): Set<string> {
+  const critical = new Set<string>()
+  for (const task of Object.values(tasks)) {
+    const deps = task.dependsOn ?? []
+    if (!deps.length || !task.startDate) continue
+    const taskStart = new Date(task.startDate).getTime()
+    for (const predId of deps) {
+      const pred = tasks[predId]
+      if (!pred?.dueDate) continue
+      const slack = (taskStart - new Date(pred.dueDate).getTime()) / DAY_MS
+      if (slack <= 1) {
+        critical.add(predId)
+        critical.add(task.id)
+      }
+    }
   }
-
-  const barColor = STATUS_COLOR[task.status]
-  const isParent = hasChildren
-
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '220px 1fr',
-        borderBottom: '1px solid #182840',
-        minHeight: 34,
-        alignItems: 'center',
-        background: isParent ? 'rgba(255,255,255,0.012)' : 'transparent',
-      }}
-    >
-      {/* Task name cell */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          padding: '5px 10px',
-          borderRight: '1px solid #1F3245',
-          gap: 4,
-          cursor: 'pointer',
-        }}
-        onClick={onClick}
-      >
-        {/* indent */}
-        <div style={{ width: depth * 14, flexShrink: 0 }} />
-
-        {hasChildren ? (
-          <span
-            style={{ color: '#3A5070', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-            onClick={(e) => { e.stopPropagation(); onToggle() }}
-          >
-            {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-          </span>
-        ) : (
-          <div style={{ width: 12 }} />
-        )}
-
-        <span
-          style={{
-            fontSize: 11.5,
-            color: isParent ? '#D0DCF0' : '#7A96B8',
-            fontWeight: isParent ? 600 : 400,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {task.title}
-        </span>
-      </div>
-
-      {/* Timeline bar cell */}
-      <div style={{ position: 'relative', height: 34, overflow: 'hidden' }}>
-        {/* Today line */}
-        {(() => {
-          const todayOff = daysBetween(rangeStart, today)
-          if (todayOff >= 0 && todayOff <= totalDays) {
-            const todayPct = (todayOff / totalDays) * 100
-            return (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  bottom: 0,
-                  left: `${todayPct}%`,
-                  width: 1,
-                  background: '#F0A500',
-                  opacity: 0.5,
-                  zIndex: 5,
-                }}
-              />
-            )
-          }
-          return null
-        })()}
-
-        {/* Bar */}
-        {widthPct > 0 && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              left: `${leftPct}%`,
-              width: `${widthPct}%`,
-              height: isParent ? 7 : 15,
-              borderRadius: 3,
-              background: barColor,
-              opacity: isParent ? 0.55 : 0.85,
-              cursor: 'pointer',
-            }}
-            onClick={onClick}
-            title={`${fmtDate(task.startDate)} → ${fmtDate(task.dueDate)}`}
-          />
-        )}
-      </div>
-    </div>
-  )
+  return critical
 }
 
 // ── Main component ─────────────────────────────────────────
-
 export default function GanttView() {
   const { tasks, selectTask } = useStore()
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [showCritical, setShowCritical] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  // range: 3 months centred on today's month
-  const rangeStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-  const rangeEnd = new Date(today.getFullYear(), today.getMonth() + 3, 0)
-  const totalDays = daysBetween(rangeStart, rangeEnd) + 1
+  // 13-month range: 2 months before → 11 months after
+  const rangeStart = new Date(today.getFullYear(), today.getMonth() - 2, 1)
+  const rangeEnd   = new Date(today.getFullYear(), today.getMonth() + 11, 0)
+  const totalDays  = daysBetween(rangeStart, rangeEnd) + 1
+  const totalWidth = totalDays * DAY_W
+
+  // Scroll to ~2 months before today on mount
+  useEffect(() => {
+    if (scrollRef.current) {
+      const todayX = daysBetween(rangeStart, today) * DAY_W
+      scrollRef.current.scrollLeft = Math.max(0, todayX - 160)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const months = eachMonth(rangeStart, rangeEnd)
+  const todayX = daysBetween(rangeStart, today) * DAY_W
+  const criticalSet = showCritical ? calcCriticalSet(tasks) : new Set<string>()
 
-  const taskList = Object.values(tasks)
-
-  // Build ordered rows (only root tasks + visible children)
+  // Build ordered visible rows
   const rows: Task[] = []
   const visit = (task: Task) => {
     rows.push(task)
-    if (!collapsed.has(task.id)) {
-      task.childIds
-        .map((id) => tasks[id])
-        .filter(Boolean)
-        .forEach(visit)
-    }
+    if (!collapsed.has(task.id))
+      task.childIds.map((id) => tasks[id]).filter(Boolean).forEach(visit)
   }
-  taskList.filter((t) => t.parentId === null).forEach(visit)
+  Object.values(tasks).filter((t) => t.parentId === null).forEach(visit)
 
   const toggleCollapse = (id: string) =>
     setCollapsed((prev) => {
@@ -195,113 +93,378 @@ export default function GanttView() {
       return next
     })
 
-  // Week lines helper
+  // Week lines (px)
   const weekLines: number[] = []
-  let cur = addDays(rangeStart, (7 - rangeStart.getDay()) % 7)
-  while (cur < rangeEnd) {
-    weekLines.push((daysBetween(rangeStart, cur) / totalDays) * 100)
-    cur = addDays(cur, 7)
+  let wcur = addDays(rangeStart, (7 - rangeStart.getDay()) % 7)
+  while (wcur < rangeEnd) {
+    weekLines.push(daysBetween(rangeStart, wcur) * DAY_W)
+    wcur = addDays(wcur, 7)
+  }
+
+  // Bar position helper
+  const barPos = (task: Task) => {
+    if (!task.startDate || !task.dueDate) return null
+    const x  = Math.max(0, daysBetween(rangeStart, new Date(task.startDate))) * DAY_W
+    const x2 = Math.min(totalDays, daysBetween(rangeStart, new Date(task.dueDate)) + 1) * DAY_W
+    return { x, w: Math.max(DAY_W * 0.5, x2 - x) }
+  }
+
+  // Row index map for arrows
+  const rowIdx = new Map(rows.map((t, i) => [t.id, i]))
+
+  // Build dependency arrows
+  type Arrow = { x1: number; y1: number; x2: number; y2: number; critical: boolean }
+  const arrows: Arrow[] = []
+  if (showCritical) {
+    for (const task of rows) {
+      const deps = task.dependsOn ?? []
+      const toIdx = rowIdx.get(task.id)
+      const toPos = barPos(task)
+      if (toIdx === undefined || !toPos) continue
+      for (const predId of deps) {
+        const fromIdx = rowIdx.get(predId)
+        const fromTask = tasks[predId]
+        if (fromIdx === undefined || !fromTask) continue
+        const fromPos = barPos(fromTask)
+        if (!fromPos) continue
+        arrows.push({
+          x1: fromPos.x + fromPos.w,
+          y1: fromIdx * ROW_H + ROW_H / 2,
+          x2: toPos.x,
+          y2: toIdx * ROW_H + ROW_H / 2,
+          critical: criticalSet.has(predId) && criticalSet.has(task.id),
+        })
+      }
+    }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Sticky header */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#0C1219' }}>
+
+      {/* Toolbar */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: '220px 1fr',
-          background: '#172130',
-          borderBottom: '1px solid #1F3245',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          padding: '5px 14px',
+          background: '#0C1219',
+          borderBottom: '1px solid #182840',
           flexShrink: 0,
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
+          gap: 8,
         }}
       >
-        <div
+        <span style={{ fontSize: 10, color: '#3A5070', flex: 1 }}>
+          ← → でスクロール　スクロールバーまたはトラックパッドで横移動
+        </span>
+        <button
+          onClick={() => setShowCritical((v) => !v)}
           style={{
-            padding: '7px 10px',
-            fontSize: 10,
-            letterSpacing: '0.07em',
-            textTransform: 'uppercase',
-            color: '#3A5070',
-            borderRight: '1px solid #1F3245',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '4px 12px',
+            borderRadius: 6,
+            border: showCritical ? '1px solid #E3423B55' : '1px solid #1F3245',
+            background: showCritical ? '#E3423B15' : 'transparent',
+            color: showCritical ? '#E3423B' : '#7A96B8',
+            fontSize: 12,
+            cursor: 'pointer',
           }}
         >
-          タスク名
-        </div>
-        <div style={{ position: 'relative', overflow: 'hidden' }}>
-          {/* Month labels */}
-          {months.map((m) => {
-            const off = daysBetween(rangeStart, m)
-            const pct = Math.max(0, (off / totalDays) * 100)
-            return (
-              <div
-                key={m.toISOString()}
-                style={{
-                  position: 'absolute',
-                  left: `${pct}%`,
-                  top: 0,
-                  bottom: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  paddingLeft: 6,
-                  fontSize: 10,
-                  color: '#3A5070',
-                  letterSpacing: '0.04em',
-                  borderLeft: '1px solid #182840',
-                }}
-              >
-                {m.getFullYear()}/{m.getMonth() + 1}月
-              </div>
-            )
-          })}
-        </div>
+          <GitBranch size={12} />
+          クリティカルパス
+        </button>
       </div>
 
-      {/* Rows */}
-      <div style={{ overflowY: 'auto', flex: 1 }}>
-        {rows.map((task) => (
-          <div key={task.id} style={{ position: 'relative' }}>
-            {/* Week grid lines overlay */}
+      {/* Scrollable Gantt body */}
+      <div
+        ref={scrollRef}
+        style={{ flex: 1, overflow: 'auto' }}
+      >
+        {/* Total content area */}
+        <div style={{ minWidth: LEFT_W + totalWidth, position: 'relative' }}>
+
+          {/* ── Header row (sticky top) ── */}
+          <div
+            style={{
+              display: 'flex',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: '#172130',
+              borderBottom: '1px solid #1F3245',
+              height: HEAD_H,
+            }}
+          >
+            {/* Top-left corner: sticky top+left */}
             <div
               style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                left: 220,
-                right: 0,
-                pointerEvents: 'none',
+                width: LEFT_W,
+                flexShrink: 0,
+                position: 'sticky',
+                left: 0,
+                zIndex: 20,
+                background: '#172130',
+                borderRight: '1px solid #1F3245',
+                display: 'flex',
+                alignItems: 'flex-end',
+                padding: '0 10px 6px',
+                fontSize: 10,
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                color: '#3A5070',
               }}
             >
-              {weekLines.map((pct, i) => (
+              タスク名
+            </div>
+
+            {/* Timeline header */}
+            <div style={{ position: 'relative', width: totalWidth, height: HEAD_H, flexShrink: 0 }}>
+              {/* Month bands */}
+              {months.map((m) => {
+                const x = Math.max(0, daysBetween(rangeStart, m)) * DAY_W
+                const daysInM = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate()
+                return (
+                  <div
+                    key={m.toISOString()}
+                    style={{
+                      position: 'absolute',
+                      left: x,
+                      top: 0,
+                      width: daysInM * DAY_W,
+                      height: HEAD_H / 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      paddingLeft: 6,
+                      fontSize: 10,
+                      color: '#7A96B8',
+                      borderLeft: '1px solid #1F3245',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {m.getFullYear()}/{String(m.getMonth() + 1).padStart(2, '0')}月
+                  </div>
+                )
+              })}
+
+              {/* Week ticks (lower half of header) */}
+              {weekLines.map((x, i) => (
                 <div
                   key={i}
                   style={{
                     position: 'absolute',
-                    top: 0,
+                    left: x,
+                    top: HEAD_H / 2,
                     bottom: 0,
-                    left: `${pct}%`,
                     width: 1,
-                    background: '#182840',
+                    background: '#1F3245',
                   }}
                 />
               ))}
-            </div>
 
-            <GanttRow
-              task={task}
-              rangeStart={rangeStart}
-              totalDays={totalDays}
-              depth={task.depth}
-              collapsed={collapsed.has(task.id)}
-              onToggle={() => toggleCollapse(task.id)}
-              onClick={() => selectTask(task.id)}
-              hasChildren={task.childIds.length > 0}
-              today={today}
-            />
+              {/* Today marker in header */}
+              {todayX >= 0 && todayX <= totalWidth && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: todayX,
+                    top: HEAD_H / 2,
+                    bottom: 0,
+                    width: 2,
+                    background: '#F0A500',
+                    borderRadius: 1,
+                  }}
+                />
+              )}
+            </div>
           </div>
-        ))}
+
+          {/* ── Task rows ── */}
+          <div style={{ position: 'relative' }}>
+
+            {/* Dependency arrows SVG (only when critical path is on) */}
+            {showCritical && arrows.length > 0 && (
+              <svg
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: LEFT_W,
+                  width: totalWidth,
+                  height: rows.length * ROW_H,
+                  pointerEvents: 'none',
+                  zIndex: 4,
+                  overflow: 'visible',
+                }}
+              >
+                <defs>
+                  <marker id="arr-crit" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+                    <path d="M0,1 L7,4 L0,7 Z" fill="#E3423B" />
+                  </marker>
+                  <marker id="arr-norm" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+                    <path d="M0,1 L7,4 L0,7 Z" fill="#3A5070" />
+                  </marker>
+                </defs>
+                {arrows.map((a, i) => {
+                  const mx = a.x1 + Math.min(60, Math.abs(a.x2 - a.x1) * 0.4)
+                  return (
+                    <path
+                      key={i}
+                      d={`M${a.x1},${a.y1} C${mx},${a.y1} ${mx},${a.y2} ${a.x2},${a.y2}`}
+                      fill="none"
+                      stroke={a.critical ? '#E3423B' : '#3A5070'}
+                      strokeWidth={a.critical ? 1.5 : 1}
+                      strokeDasharray={a.critical ? 'none' : '4,3'}
+                      opacity={a.critical ? 0.8 : 0.5}
+                      markerEnd={a.critical ? 'url(#arr-crit)' : 'url(#arr-norm)'}
+                    />
+                  )
+                })}
+              </svg>
+            )}
+
+            {rows.map((task) => {
+              const pos = barPos(task)
+              const isParent = task.childIds.length > 0
+              const isCrit = criticalSet.has(task.id)
+              const barColor = isCrit && showCritical ? '#E3423B' : STATUS_COLOR[task.status]
+              const leftBg = isParent ? '#111B26' : '#0C1219'
+
+              return (
+                <div
+                  key={task.id}
+                  style={{
+                    display: 'flex',
+                    height: ROW_H,
+                    borderBottom: '1px solid #182840',
+                  }}
+                >
+                  {/* Left cell: sticky left */}
+                  <div
+                    style={{
+                      width: LEFT_W,
+                      flexShrink: 0,
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 5,
+                      background: leftBg,
+                      borderRight: '1px solid #1F3245',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 10px',
+                      gap: 4,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => selectTask(task.id)}
+                  >
+                    <div style={{ width: task.depth * 14, flexShrink: 0 }} />
+
+                    {isParent ? (
+                      <span
+                        style={{ color: '#3A5070', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                        onClick={(e) => { e.stopPropagation(); toggleCollapse(task.id) }}
+                      >
+                        {collapsed.has(task.id) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                      </span>
+                    ) : (
+                      <div style={{ width: 12 }} />
+                    )}
+
+                    {showCritical && isCrit && (
+                      <span
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          background: '#E3423B',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        color: isParent ? '#D0DCF0' : '#7A96B8',
+                        fontWeight: isParent ? 600 : 400,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {task.title}
+                    </span>
+                  </div>
+
+                  {/* Bar cell */}
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: totalWidth,
+                      flexShrink: 0,
+                      height: ROW_H,
+                      background: isParent ? 'rgba(255,255,255,0.008)' : 'transparent',
+                    }}
+                  >
+                    {/* Week grid lines */}
+                    {weekLines.map((x, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          bottom: 0,
+                          left: x,
+                          width: 1,
+                          background: '#182840',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    ))}
+
+                    {/* Today line */}
+                    {todayX >= 0 && todayX <= totalWidth && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          bottom: 0,
+                          left: todayX,
+                          width: 1,
+                          background: '#F0A500',
+                          opacity: 0.4,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    )}
+
+                    {/* Bar */}
+                    {pos && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          left: pos.x,
+                          width: pos.w,
+                          height: isParent ? 7 : 15,
+                          borderRadius: 3,
+                          background: barColor,
+                          opacity: isParent ? 0.6 : 0.88,
+                          cursor: 'pointer',
+                          zIndex: 2,
+                          boxShadow: isCrit && showCritical ? `0 0 0 1px ${barColor}55` : 'none',
+                        }}
+                        onClick={() => selectTask(task.id)}
+                        title={`${task.title}\n${fmtDate(task.startDate)} → ${fmtDate(task.dueDate)}`}
+                      />
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
     </div>
   )

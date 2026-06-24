@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Calendar, AlertCircle, Trash2, Eye, Edit3 } from 'lucide-react'
+import { X, Calendar, AlertCircle, Trash2, Eye, Edit3, UserPlus } from 'lucide-react'
 import { marked } from 'marked'
 import { useStore } from '../store'
 import type { Task, TaskStatus, Priority } from '../types'
@@ -44,7 +44,7 @@ function Selector<T extends string>({
 }
 
 export default function TaskDetail() {
-  const { selectedTaskId, tasks, tags, users, selectTask, updateTask, deleteTask } = useStore()
+  const { selectedTaskId, tasks, tags, users, selectTask, updateTask, deleteTask, setAddingUser } = useStore()
   const task: Task | null = selectedTaskId ? tasks[selectedTaskId] ?? null : null
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [descPreview, setDescPreview] = useState(false)
@@ -192,10 +192,10 @@ export default function TaskDetail() {
             </div>,
           )}
 
-          {/* Assignees — editable */}
+          {/* Assignees — editable + add new */}
           {row(
             '担当者',
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
               {userList.map((u) => {
                 const active = task.assigneeIds.includes(u.id)
                 return (
@@ -239,6 +239,26 @@ export default function TaskDetail() {
                   </button>
                 )
               })}
+              {/* Add new user */}
+              <button
+                onClick={() => setAddingUser(true)}
+                title="新しい担当者を追加"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '3px 9px',
+                  borderRadius: 16,
+                  border: '1px dashed #1F3245',
+                  background: 'transparent',
+                  color: '#3A5070',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                <UserPlus size={11} />
+                担当者追加
+              </button>
             </div>,
           )}
 
@@ -326,6 +346,94 @@ export default function TaskDetail() {
               />
             )}
           </div>
+
+          {/* Predecessor tasks (dependsOn) */}
+          {(() => {
+            const deps = task.dependsOn ?? []
+            const otherTasks = Object.values(tasks).filter(
+              (t) => t.id !== task.id && !deps.includes(t.id)
+            )
+            const removeDep = (predId: string) =>
+              update({ dependsOn: deps.filter((id) => id !== predId) })
+            const addDep = (predId: string) => {
+              if (!predId || deps.includes(predId)) return
+              update({ dependsOn: [...deps, predId] })
+            }
+
+            return (
+              <div style={{ padding: '10px 0', borderBottom: '1px solid #182840' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: '#3A5070' }}>前提タスク</span>
+                </div>
+
+                {/* Current deps */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: deps.length > 0 ? 8 : 0 }}>
+                  {deps.map((predId) => {
+                    const pred = tasks[predId]
+                    if (!pred) return null
+                    return (
+                      <span
+                        key={predId}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          padding: '2px 6px 2px 9px',
+                          borderRadius: 10,
+                          background: '#172130',
+                          border: '1px solid #1F3245',
+                          fontSize: 11,
+                          color: '#7A96B8',
+                        }}
+                      >
+                        {pred.title.length > 20 ? pred.title.slice(0, 20) + '…' : pred.title}
+                        <button
+                          onClick={() => removeDep(predId)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#3A5070',
+                            cursor: 'pointer',
+                            padding: 0,
+                            lineHeight: 1,
+                            display: 'flex',
+                          }}
+                          title="前提タスクを外す"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    )
+                  })}
+                </div>
+
+                {/* Add dependency dropdown */}
+                <select
+                  value=""
+                  onChange={(e) => { addDep(e.target.value); e.target.value = '' }}
+                  style={{
+                    background: '#172130',
+                    border: '1px dashed #1F3245',
+                    borderRadius: 6,
+                    padding: '4px 8px',
+                    color: '#3A5070',
+                    fontSize: 11,
+                    outline: 'none',
+                    width: '100%',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="">+ 前提タスクを追加...</option>
+                  {otherTasks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {'　'.repeat(t.depth)}{t.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )
+          })()}
 
           {/* Child tasks */}
           {children.length > 0 && (

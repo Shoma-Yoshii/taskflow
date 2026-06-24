@@ -14,6 +14,7 @@ export interface Task {
   depth: number
   tagIds: string[]
   assigneeIds: string[]
+  dependsOn?: string[]
   startDate?: string
   dueDate?: string
   estimatedHours?: number

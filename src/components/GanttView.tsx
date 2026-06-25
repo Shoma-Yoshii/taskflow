@@ -5,11 +5,27 @@ import type { Task } from '../types'
 import { STATUS_COLOR, fmtDate } from '../lib/utils'
 
 // ── Constants ─────────────────────────────────────────────
-const DAY_W   = 22    // px per day
-const ROW_H   = 36    // px per row
-const LEFT_W  = 220   // px for task name column
-const HEAD_H  = 48    // px for header
-const DAY_MS  = 86400000
+const DAY_W    = 22    // px per day
+const ROW_H    = 36    // px per row
+const NAME_W   = 180   // task name sub-column
+const STATUS_W = 76    // status badge sub-column
+const DATE_W   = 164   // date range sub-column
+const LEFT_W   = NAME_W + STATUS_W + DATE_W
+const HEAD_H   = 48    // px for header
+const DAY_MS   = 86400000
+
+const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+  todo:        { bg: '#1A2535', text: '#7A96B8', label: 'TODO'   },
+  in_progress: { bg: '#0D2240', text: '#4898F2', label: '進行中' },
+  review:      { bg: '#2A1E00', text: '#F0A500', label: 'レビュー' },
+  done:        { bg: '#0A2015', text: '#38C172', label: '完了'   },
+}
+
+function fmtFull(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+}
 
 // ── Helpers ───────────────────────────────────────────────
 function daysBetween(a: Date, b: Date): number {
@@ -209,14 +225,21 @@ export default function GanttView() {
                 borderRight: '1px solid #1F3245',
                 display: 'flex',
                 alignItems: 'flex-end',
-                padding: '0 10px 6px',
                 fontSize: 10,
                 letterSpacing: '0.07em',
                 textTransform: 'uppercase',
                 color: '#3A5070',
               }}
             >
-              タスク名
+              <div style={{ width: NAME_W, flexShrink: 0, padding: '0 10px 6px' }}>タスク名</div>
+              <div style={{
+                width: STATUS_W, flexShrink: 0, padding: '0 0 6px',
+                textAlign: 'center', borderLeft: '1px solid #182840',
+              }}>ステータス</div>
+              <div style={{
+                width: DATE_W, flexShrink: 0, padding: '0 8px 6px',
+                borderLeft: '1px solid #182840',
+              }}>日付</div>
             </div>
 
             {/* Timeline header */}
@@ -339,7 +362,7 @@ export default function GanttView() {
                     borderBottom: '1px solid #182840',
                   }}
                 >
-                  {/* Left cell: sticky left */}
+                  {/* Left cell: sticky left — 3 sub-columns */}
                   <div
                     style={{
                       width: LEFT_W,
@@ -351,49 +374,91 @@ export default function GanttView() {
                       borderRight: '1px solid #1F3245',
                       display: 'flex',
                       alignItems: 'center',
-                      padding: '0 10px',
-                      gap: 4,
                       cursor: 'pointer',
                     }}
                     onClick={() => selectTask(task.id)}
                   >
-                    <div style={{ width: task.depth * 14, flexShrink: 0 }} />
+                    {/* タスク名 */}
+                    <div style={{
+                      width: NAME_W, flexShrink: 0,
+                      display: 'flex', alignItems: 'center',
+                      padding: '0 6px 0 10px', gap: 4, overflow: 'hidden',
+                    }}>
+                      <div style={{ width: task.depth * 14, flexShrink: 0 }} />
 
-                    {isParent ? (
-                      <span
-                        style={{ color: '#3A5070', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                        onClick={(e) => { e.stopPropagation(); toggleCollapse(task.id) }}
-                      >
-                        {collapsed.has(task.id) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                      </span>
-                    ) : (
-                      <div style={{ width: 12 }} />
-                    )}
+                      {isParent ? (
+                        <span
+                          style={{ color: '#3A5070', display: 'flex', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}
+                          onClick={(e) => { e.stopPropagation(); toggleCollapse(task.id) }}
+                        >
+                          {collapsed.has(task.id) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                        </span>
+                      ) : (
+                        <div style={{ width: 12, flexShrink: 0 }} />
+                      )}
 
-                    {showCritical && isCrit && (
-                      <span
-                        style={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: '50%',
-                          background: '#E3423B',
-                          flexShrink: 0,
-                        }}
-                      />
-                    )}
+                      {showCritical && isCrit && (
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#E3423B', flexShrink: 0 }} />
+                      )}
 
-                    <span
-                      style={{
+                      <span style={{
                         fontSize: 11.5,
                         color: isParent ? '#D0DCF0' : '#7A96B8',
                         fontWeight: isParent ? 600 : 400,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {task.title}
-                    </span>
+                      }}>
+                        {task.title}
+                      </span>
+                    </div>
+
+                    {/* ステータスバッジ */}
+                    <div style={{
+                      width: STATUS_W, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderLeft: '1px solid #182840',
+                    }}>
+                      {(() => {
+                        const b = STATUS_BADGE[task.status]
+                        return (
+                          <span style={{
+                            fontSize: 9.5,
+                            fontWeight: 600,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: b.bg,
+                            color: b.text,
+                            whiteSpace: 'nowrap',
+                            letterSpacing: '0.03em',
+                          }}>
+                            {b.label}
+                          </span>
+                        )
+                      })()}
+                    </div>
+
+                    {/* 日付 */}
+                    <div style={{
+                      width: DATE_W, flexShrink: 0,
+                      display: 'flex', alignItems: 'center',
+                      padding: '0 8px',
+                      borderLeft: '1px solid #182840',
+                      overflow: 'hidden',
+                    }}>
+                      <span style={{
+                        fontSize: 10,
+                        color: '#4A6A8A',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {task.startDate && task.dueDate
+                          ? `${fmtFull(task.startDate)} → ${fmtFull(task.dueDate)}`
+                          : '—'
+                        }
+                      </span>
+                    </div>
                   </div>
 
                   {/* Bar cell */}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowUp, ArrowDown, ArrowUpDown, ListFilter, X } from 'lucide-react'
 import { useStore, getFilteredTasks } from '../store'
-import type { Task, TaskStatus } from '../types'
+import type { Task, TaskStatus, User, Tag } from '../types'
 
 type SortKey = 'title' | 'status' | 'dueDate' | 'assignee'
 type SortDir  = 'asc' | 'desc'
@@ -33,8 +33,8 @@ function TaskRow({
 }: {
   task:     Task
   even:     boolean
-  users:    ReturnType<typeof useStore>['users']
-  tags:     ReturnType<typeof useStore>['tags']
+  users:    Record<string, User>
+  tags:     Record<string, Tag>
   onSelect: (id: string) => void
 }) {
   const b         = STATUS_BADGE[task.status]

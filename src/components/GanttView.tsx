@@ -11,7 +11,9 @@ const NAME_W   = 180   // task name sub-column
 const STATUS_W = 76    // status badge sub-column
 const DATE_W   = 164   // date range sub-column
 const LEFT_W   = NAME_W + STATUS_W + DATE_W
-const HEAD_H   = 48    // px for header
+const MONTH_H  = 36    // px — upper header row (month)
+const WEEK_H   = 28    // px — lower header row (week dates)
+const HEAD_H   = MONTH_H + WEEK_H
 const DAY_MS   = 86400000
 
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
@@ -109,11 +111,11 @@ export default function GanttView() {
       return next
     })
 
-  // Week lines (px)
-  const weekLines: number[] = []
+  // Week ticks — position + date for labels
+  const weekTicks: { x: number; date: Date }[] = []
   let wcur = addDays(rangeStart, (7 - rangeStart.getDay()) % 7)
   while (wcur < rangeEnd) {
-    weekLines.push(daysBetween(rangeStart, wcur) * DAY_W)
+    weekTicks.push({ x: daysBetween(rangeStart, wcur) * DAY_W, date: new Date(wcur) })
     wcur = addDays(wcur, 7)
   }
 
@@ -244,10 +246,13 @@ export default function GanttView() {
 
             {/* Timeline header */}
             <div style={{ position: 'relative', width: totalWidth, height: HEAD_H, flexShrink: 0 }}>
-              {/* Month bands */}
-              {months.map((m) => {
+
+              {/* ── 上段：月ラベル ── */}
+              {months.map((m, mi) => {
                 const x = Math.max(0, daysBetween(rangeStart, m)) * DAY_W
                 const daysInM = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate()
+                const isCurrent = m.getFullYear() === today.getFullYear() && m.getMonth() === today.getMonth()
+                const showYear  = mi === 0 || m.getFullYear() !== months[mi - 1].getFullYear()
                 return (
                   <div
                     key={m.toISOString()}
@@ -256,49 +261,95 @@ export default function GanttView() {
                       left: x,
                       top: 0,
                       width: daysInM * DAY_W,
-                      height: HEAD_H / 2,
+                      height: MONTH_H,
                       display: 'flex',
                       alignItems: 'center',
-                      paddingLeft: 6,
-                      fontSize: 10,
-                      color: '#7A96B8',
+                      paddingLeft: 8,
+                      gap: 5,
                       borderLeft: '1px solid #1F3245',
+                      background: isCurrent ? 'rgba(240,165,0,0.06)' : 'transparent',
+                      overflow: 'hidden',
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {m.getFullYear()}/{String(m.getMonth() + 1).padStart(2, '0')}月
+                    {showYear && (
+                      <span style={{ fontSize: 9, color: '#2A3F55', fontWeight: 600, letterSpacing: '0.06em', flexShrink: 0 }}>
+                        {m.getFullYear()}
+                      </span>
+                    )}
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: isCurrent ? 700 : 500,
+                      color: isCurrent ? '#F0A500' : '#7A96B8',
+                      letterSpacing: '0.02em',
+                    }}>
+                      {String(m.getMonth() + 1).padStart(2, '0')}月
+                    </span>
                   </div>
                 )
               })}
 
-              {/* Week ticks (lower half of header) */}
-              {weekLines.map((x, i) => (
-                <div
-                  key={i}
-                  style={{
-                    position: 'absolute',
-                    left: x,
-                    top: HEAD_H / 2,
-                    bottom: 0,
-                    width: 1,
-                    background: '#1F3245',
-                  }}
-                />
-              ))}
+              {/* 月行・週行の区切り線 */}
+              <div style={{ position: 'absolute', left: 0, right: 0, top: MONTH_H, height: 1, background: '#1F3245' }} />
 
-              {/* Today marker in header */}
+              {/* ── 下段：週ごとの縦線 + 日付ラベル ── */}
+              {weekTicks.map(({ x, date }, i) => {
+                const isThisWeek = today >= date && today < addDays(date, 7)
+                return (
+                  <div key={i}>
+                    {/* 縦線 */}
+                    <div style={{
+                      position: 'absolute',
+                      left: x, top: MONTH_H, bottom: 0,
+                      width: 1, background: '#1A2A3C',
+                    }} />
+                    {/* 日付数字 */}
+                    <div style={{
+                      position: 'absolute',
+                      left: x + 4,
+                      top: MONTH_H + 7,
+                      fontSize: 9,
+                      fontWeight: isThisWeek ? 700 : 400,
+                      color: isThisWeek ? '#F0A500' : '#2E4460',
+                      lineHeight: 1,
+                      userSelect: 'none',
+                      pointerEvents: 'none',
+                    }}>
+                      {date.getDate()}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* ── 今日マーカー（ヘッダー全高 + バッジ）── */}
               {todayX >= 0 && todayX <= totalWidth && (
-                <div
-                  style={{
+                <>
+                  <div style={{
+                    position: 'absolute',
+                    left: todayX, top: 0, bottom: 0,
+                    width: 2, background: '#F0A500', opacity: 0.9, borderRadius: 1,
+                    zIndex: 3,
+                  }} />
+                  <div style={{
                     position: 'absolute',
                     left: todayX,
-                    top: HEAD_H / 2,
-                    bottom: 0,
-                    width: 2,
+                    top: MONTH_H + 6,
+                    transform: 'translateX(-50%)',
                     background: '#F0A500',
-                    borderRadius: 1,
-                  }}
-                />
+                    color: '#0C1219',
+                    fontSize: 7.5,
+                    fontWeight: 800,
+                    padding: '1px 4px',
+                    borderRadius: 3,
+                    letterSpacing: '0.04em',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1.5,
+                    zIndex: 4,
+                    pointerEvents: 'none',
+                  }}>
+                    今日
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -472,7 +523,7 @@ export default function GanttView() {
                     }}
                   >
                     {/* Week grid lines */}
-                    {weekLines.map((x, i) => (
+                    {weekTicks.map(({ x }, i) => (
                       <div
                         key={i}
                         style={{

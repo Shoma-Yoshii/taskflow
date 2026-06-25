@@ -117,7 +117,7 @@ function AssigneeColumn({
 
 // ── メインコンポーネント ───────────────────────────────────
 export default function KanbanView() {
-  const { tasks, users, filterTagIds, filterMode, filterAssigneeIds, moveTask } = useStore()
+  const { tasks, users, filterTagIds, filterMode, filterAssigneeIds, filterStatusIds, moveTask } = useStore()
   const [activeTask, setActiveTask] = useState<Task | null>(null)
   const [groupMode, setGroupMode] = useState<GroupMode>('status')
 
@@ -125,7 +125,7 @@ export default function KanbanView() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  const visible = getFilteredTasks(tasks, filterTagIds, filterMode, filterAssigneeIds)
+  const visible = getFilteredTasks(tasks, filterTagIds, filterMode, filterAssigneeIds, filterStatusIds)
 
   const byStatus = (status: TaskStatus) =>
     Object.values(tasks).filter((t) => t.status === status && visible.has(t.id))
@@ -151,6 +151,11 @@ export default function KanbanView() {
   }
 
   const userList = Object.values(users)
+
+  // ステータス別モードでフィルターが有効な場合、対象列のみ表示
+  const visibleColumns = filterStatusIds.length > 0
+    ? COLUMNS.filter((col) => filterStatusIds.includes(col.status))
+    : COLUMNS
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -191,7 +196,7 @@ export default function KanbanView() {
           alignItems: 'flex-start',
         }}>
           {groupMode === 'status'
-            ? COLUMNS.map((col) => (
+            ? visibleColumns.map((col) => (
                 <StatusColumn key={col.status} {...col} tasks={byStatus(col.status)} />
               ))
             : (

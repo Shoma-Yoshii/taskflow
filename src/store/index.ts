@@ -15,6 +15,7 @@ interface AppState {
   filterTagIds: string[]
   filterMode: FilterMode
   filterAssigneeIds: string[]
+  filterStatusIds: TaskStatus[]
   toasts: Toast[]
 
   setView: (v: ViewMode) => void
@@ -24,6 +25,7 @@ interface AppState {
   toggleFilterTag: (id: string) => void
   setFilterMode: (m: FilterMode) => void
   toggleFilterAssignee: (id: string) => void
+  toggleFilterStatus: (s: TaskStatus) => void
   clearFilters: () => void
   addToast: (message: string, type?: Toast['type']) => void
   removeToast: (id: string) => void
@@ -51,6 +53,7 @@ export const useStore = create<AppState>()(
       filterTagIds: [],
       filterMode: 'OR',
       filterAssigneeIds: [],
+      filterStatusIds: [],
       toasts: [],
 
       setView: (view) => set({ view }),
@@ -74,7 +77,14 @@ export const useStore = create<AppState>()(
             : [...s.filterAssigneeIds, id],
         })),
 
-      clearFilters: () => set({ filterTagIds: [], filterAssigneeIds: [] }),
+      toggleFilterStatus: (s) =>
+        set((state) => ({
+          filterStatusIds: state.filterStatusIds.includes(s)
+            ? state.filterStatusIds.filter((x) => x !== s)
+            : [...state.filterStatusIds, s],
+        })),
+
+      clearFilters: () => set({ filterTagIds: [], filterAssigneeIds: [], filterStatusIds: [] }),
 
       addToast: (message, type = 'info') =>
         set((s) => ({
@@ -169,6 +179,7 @@ export const useStore = create<AppState>()(
         filterTagIds: s.filterTagIds,
         filterMode: s.filterMode,
         filterAssigneeIds: s.filterAssigneeIds,
+        filterStatusIds: s.filterStatusIds,
       }),
     }
   )
@@ -180,7 +191,8 @@ export function getFilteredTasks(
   tasks: Record<string, Task>,
   filterTagIds: string[],
   filterMode: FilterMode,
-  filterAssigneeIds: string[]
+  filterAssigneeIds: string[],
+  filterStatusIds: TaskStatus[] = []
 ): Set<string> {
   const all = Object.values(tasks)
   let filtered = all
@@ -197,6 +209,10 @@ export function getFilteredTasks(
     filtered = filtered.filter((t) =>
       filterAssigneeIds.some((uid) => t.assigneeIds.includes(uid))
     )
+  }
+
+  if (filterStatusIds.length > 0) {
+    filtered = filtered.filter((t) => filterStatusIds.includes(t.status))
   }
 
   return new Set(filtered.map((t) => t.id))

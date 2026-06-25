@@ -1,15 +1,24 @@
 import { useStore } from '../store'
+import { STATUS_COLOR } from '../lib/utils'
+import type { TaskStatus } from '../types'
+
+const STATUS_LABELS: { status: TaskStatus; label: string }[] = [
+  { status: 'todo',        label: 'Todo'        },
+  { status: 'in_progress', label: 'In Progress' },
+  { status: 'review',      label: 'Review'      },
+  { status: 'done',        label: 'Done'        },
+]
 
 export default function FilterBar() {
   const {
     tags, users,
-    filterTagIds, filterMode, filterAssigneeIds,
-    toggleFilterTag, setFilterMode, toggleFilterAssignee, clearFilters,
+    filterTagIds, filterMode, filterAssigneeIds, filterStatusIds,
+    toggleFilterTag, setFilterMode, toggleFilterAssignee, toggleFilterStatus, clearFilters,
   } = useStore()
 
   const tagList = Object.values(tags)
   const userList = Object.values(users)
-  const hasFilter = filterTagIds.length > 0 || filterAssigneeIds.length > 0
+  const hasFilter = filterTagIds.length > 0 || filterAssigneeIds.length > 0 || filterStatusIds.length > 0
 
   const chip = (
     label: string,
@@ -64,6 +73,16 @@ export default function FilterBar() {
         flexShrink: 0,
       }}
     >
+      {/* Status row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#3A5070', width: 52, flexShrink: 0 }}>
+          ステータス
+        </span>
+        {STATUS_LABELS.map(({ status, label }) =>
+          chip(label, filterStatusIds.includes(status), STATUS_COLOR[status], () => toggleFilterStatus(status), true)
+        )}
+      </div>
+
       {/* Tag row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#3A5070', width: 52, flexShrink: 0 }}>

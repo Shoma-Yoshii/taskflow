@@ -1,6 +1,6 @@
 export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done'
 export type Priority = 'low' | 'medium' | 'high' | 'urgent'
-export type ViewMode = 'kanban' | 'gantt'
+export type ViewMode = 'kanban' | 'gantt' | 'list'
 export type FilterMode = 'AND' | 'OR'
 
 export interface Task {

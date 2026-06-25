@@ -1,4 +1,4 @@
-import { LayoutGrid, GanttChart, Plus, UserPlus } from 'lucide-react'
+import { LayoutGrid, GanttChart, Table2, Plus, UserPlus } from 'lucide-react'
 import { useStore } from '../store'
 
 export default function Header() {
@@ -78,7 +78,8 @@ export default function Header() {
       >
         {([
           { id: 'kanban', label: 'カンバン', Icon: LayoutGrid },
-          { id: 'gantt', label: 'ガント', Icon: GanttChart },
+          { id: 'gantt',  label: 'ガント',   Icon: GanttChart },
+          { id: 'list',   label: '一覧',     Icon: Table2     },
         ] as const).map(({ id, label, Icon }) => (
           <button
             key={id}

@@ -3,6 +3,7 @@ import Header from './components/Header'
 import FilterBar from './components/FilterBar'
 import KanbanView from './components/KanbanView'
 import GanttView from './components/GanttView'
+import ListView from './components/ListView'
 import TaskDetail from './components/TaskDetail'
 import AddTaskModal from './components/AddTaskModal'
 import AddUserModal from './components/AddUserModal'
@@ -24,7 +25,7 @@ export default function App() {
       <Header />
       <FilterBar />
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        {view === 'kanban' ? <KanbanView /> : <GanttView />}
+        {view === 'kanban' ? <KanbanView /> : view === 'gantt' ? <GanttView /> : <ListView />}
       </div>
       {selectedTaskId && <TaskDetail />}
       {addingStatus !== null && <AddTaskModal />}

@@ -59,3 +59,25 @@ body {
 .md-preview table { border-collapse: collapse; width: 100%; margin: 8px 0; }
 .md-preview th, .md-preview td { border: 1px solid #1F3245; padding: 4px 8px; font-size: 11px; }
 .md-preview th { background: #172130; color: #D0DCF0; }
+
+/* Date input — dark theme */
+input[type="date"].date-input {
+  background: #0C1219;
+  border: 1px solid #1F3245;
+  border-radius: 6px;
+  color: #7A96B8;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 3px 8px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+input[type="date"].date-input:hover { border-color: #3A5070; }
+input[type="date"].date-input:focus { border-color: #4898F2; color: #C8D8F0; }
+input[type="date"].date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.4) sepia(1) hue-rotate(180deg);
+  cursor: pointer;
+  opacity: 0.6;
+}
+input[type="date"].date-input::-webkit-calendar-picker-indicator:hover { opacity: 1; }

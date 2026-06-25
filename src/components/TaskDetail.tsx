@@ -181,14 +181,25 @@ export default function TaskDetail() {
 
           {row(
             '期間',
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#7A96B8' }}>
-              <Calendar size={12} style={{ color: '#3A5070' }} />
-              {task.startDate ? fmtDate(task.startDate) : '–'}
-              <span style={{ color: '#3A5070' }}>→</span>
-              <span style={{ color: overdue ? '#E3423B' : '#7A96B8' }}>
-                {task.dueDate ? fmtDate(task.dueDate) : '–'}
-              </span>
-              {overdue && <AlertCircle size={11} style={{ color: '#E3423B' }} />}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Calendar size={12} style={{ color: '#3A5070', flexShrink: 0 }} />
+              <input
+                type="date"
+                className="date-input"
+                value={task.startDate ? task.startDate.slice(0, 10) : ''}
+                onChange={(e) => update({ startDate: e.target.value || undefined })}
+                title="開始日"
+              />
+              <span style={{ color: '#3A5070', fontSize: 12, flexShrink: 0 }}>→</span>
+              <input
+                type="date"
+                className="date-input"
+                value={task.dueDate ? task.dueDate.slice(0, 10) : ''}
+                onChange={(e) => update({ dueDate: e.target.value || undefined })}
+                title="終了日"
+                style={{ color: overdue ? '#E3423B' : undefined }}
+              />
+              {overdue && <AlertCircle size={11} style={{ color: '#E3423B', flexShrink: 0 }} />}
             </div>,
           )}
 

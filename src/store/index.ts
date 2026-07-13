@@ -22,6 +22,9 @@ interface AppState {
   filterAssigneeIds: string[]
   filterStatusIds: TaskStatus[]
   toasts: Toast[]
+  ganttOrder: string[]       // root task IDs in display order
+  archivedIds: string[]      // archived task IDs
+  showArchived: boolean      // transient — not persisted
 
   // ── Actions ─────────────────────────────────────────
   initialize: () => Promise<void>
@@ -36,6 +39,10 @@ interface AppState {
   clearFilters: () => void
   addToast: (message: string, type?: Toast['type']) => void
   removeToast: (id: string) => void
+  setGanttOrder: (ids: string[]) => void
+  archiveTask: (id: string) => void
+  restoreTask: (id: string) => void
+  setShowArchived: (v: boolean) => void
 
   updateTask: (id: string, updates: Partial<Task>) => void
   moveTask: (id: string, status: TaskStatus) => void
@@ -68,6 +75,9 @@ export const useStore = create<AppState>()(
       filterAssigneeIds: [],
       filterStatusIds: [],
       toasts: [],
+      ganttOrder: [],
+      archivedIds: [],
+      showArchived: false,
 
       // ── Bootstrap ───────────────────────────────────
       initialize: async () => {
@@ -164,6 +174,19 @@ export const useStore = create<AppState>()(
       removeToast: (id) =>
         set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
+      setGanttOrder: (ids) => set({ ganttOrder: ids }),
+
+      archiveTask: (id) =>
+        set((s) => ({
+          archivedIds: s.archivedIds.includes(id) ? s.archivedIds : [...s.archivedIds, id],
+          selectedTaskId: s.selectedTaskId === id ? null : s.selectedTaskId,
+        })),
+
+      restoreTask: (id) =>
+        set((s) => ({ archivedIds: s.archivedIds.filter((x) => x !== id) })),
+
+      setShowArchived: (v) => set({ showArchived: v }),
+
       // ── Data mutations (optimistic + Supabase sync) ─
       updateTask: (id, updates) => {
         const updated: Task = { ...get().tasks[id], ...updates, updatedAt: new Date().toISOString() }
@@ -197,6 +220,9 @@ export const useStore = create<AppState>()(
           }
           return {
             tasks,
+            ganttOrder: task.parentId === null
+              ? [...s.ganttOrder, task.id]
+              : s.ganttOrder,
             toasts: [
               ...s.toasts,
               { id: nanoid(), message: 'タスクを追加しました', type: 'success' as const },
@@ -245,6 +271,8 @@ export const useStore = create<AppState>()(
 
         set({
           tasks: newTasks,
+          ganttOrder: s.ganttOrder.filter((id) => !toDelete.has(id)),
+          archivedIds: s.archivedIds.filter((id) => !toDelete.has(id)),
           selectedTaskId: toDelete.has(s.selectedTaskId ?? '') ? null : s.selectedTaskId,
           toasts: [
             ...s.toasts,
@@ -287,6 +315,8 @@ export const useStore = create<AppState>()(
         filterMode: s.filterMode,
         filterAssigneeIds: s.filterAssigneeIds,
         filterStatusIds: s.filterStatusIds,
+        ganttOrder: s.ganttOrder,
+        archivedIds: s.archivedIds,
       }),
     }
   )

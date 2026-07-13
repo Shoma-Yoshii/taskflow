@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Calendar, AlertCircle, Trash2, Eye, Edit3, UserPlus } from 'lucide-react'
+import { X, Calendar, AlertCircle, Trash2, Eye, Edit3, UserPlus, Archive, ArchiveRestore } from 'lucide-react'
 import { marked } from 'marked'
 import { useStore } from '../store'
 import type { Task, TaskStatus, Priority } from '../types'
@@ -44,7 +44,7 @@ function Selector<T extends string>({
 }
 
 export default function TaskDetail() {
-  const { selectedTaskId, tasks, tags, users, selectTask, updateTask, deleteTask, setAddingUser } = useStore()
+  const { selectedTaskId, tasks, tags, users, selectTask, updateTask, deleteTask, setAddingUser, archivedIds, archiveTask, restoreTask } = useStore()
   const task: Task | null = selectedTaskId ? tasks[selectedTaskId] ?? null : null
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [descPreview, setDescPreview] = useState(false)
@@ -510,8 +510,32 @@ export default function TaskDetail() {
             </div>
           )}
 
+          {/* Archive / Restore */}
+          {(() => {
+            const isArchived = archivedIds.includes(task.id)
+            return (
+              <div style={{ padding: '12px 0 0' }}>
+                <button
+                  onClick={() => isArchived ? restoreTask(task.id) : archiveTask(task.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'none',
+                    border: isArchived ? '1px solid #F0A50044' : '1px solid #1F3245',
+                    borderRadius: 6,
+                    color: isArchived ? '#F0A500' : '#3A5070',
+                    fontSize: 12, cursor: 'pointer',
+                    padding: '5px 12px', transition: 'all 0.12s',
+                  }}
+                >
+                  {isArchived ? <ArchiveRestore size={12} /> : <Archive size={12} />}
+                  {isArchived ? 'アーカイブを解除' : 'アーカイブ'}
+                </button>
+              </div>
+            )
+          })()}
+
           {/* Delete */}
-          <div style={{ padding: '16px 0 4px' }}>
+          <div style={{ padding: '10px 0 4px' }}>
             {!confirmDelete ? (
               <button
                 onClick={() => setConfirmDelete(true)}

@@ -5,29 +5,30 @@ import type { Task } from '../types'
 import { STATUS_COLOR, fmtDate } from '../lib/utils'
 
 // ── Constants ─────────────────────────────────────────────
-const DAY_W    = 22    // px per day
-const ROW_H    = 36    // px per row
-const NAME_W   = 180   // task name sub-column
-const STATUS_W = 76    // status badge sub-column
-const DATE_W   = 164   // date range sub-column
-const LEFT_W   = NAME_W + STATUS_W + DATE_W
-const MONTH_H  = 36    // px — upper header row (month)
-const WEEK_H   = 28    // px — lower header row (week dates)
+const DAY_W    = 22
+const ROW_H    = 40
+const NAME_W   = 190
+const ASSIGN_W = 78
+const STATUS_W = 68
+const LEFT_W   = NAME_W + ASSIGN_W + STATUS_W
+const MONTH_H  = 36
+const WEEK_H   = 28
 const HEAD_H   = MONTH_H + WEEK_H
 const DAY_MS   = 86400000
 
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
-  todo:        { bg: '#1A2535', text: '#7A96B8', label: 'TODO'   },
-  in_progress: { bg: '#0D2240', text: '#4898F2', label: '進行中' },
+  todo:        { bg: '#1A2535', text: '#7A96B8', label: '未着手'  },
+  in_progress: { bg: '#0D2240', text: '#4898F2', label: '進行中'  },
   review:      { bg: '#2A1E00', text: '#F0A500', label: 'レビュー' },
-  done:        { bg: '#0A2015', text: '#38C172', label: '完了'   },
+  done:        { bg: '#0A2015', text: '#38C172', label: '完了'    },
 }
 
-function fmtFull(iso?: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
-}
+const STATUS_INFO = [
+  { key: 'todo'       , label: '未着手',   color: '#7A96B8' },
+  { key: 'in_progress', label: '進行中',   color: '#4898F2' },
+  { key: 'review'     , label: 'レビュー', color: '#F0A500' },
+  { key: 'done'       , label: '完了',     color: '#38C172' },
+] as const
 
 // ── Helpers ───────────────────────────────────────────────
 function daysBetween(a: Date, b: Date): number {
@@ -46,7 +47,6 @@ function eachMonth(start: Date, end: Date): Date[] {
   return months
 }
 
-// ── Critical path: tasks with ≤1 day slack between dependent pairs ──
 function calcCriticalSet(tasks: Record<string, Task>): Set<string> {
   const critical = new Set<string>()
   for (const task of Object.values(tasks)) {
@@ -68,7 +68,7 @@ function calcCriticalSet(tasks: Record<string, Task>): Set<string> {
 
 // ── Main component ─────────────────────────────────────────
 export default function GanttView() {
-  const { tasks, selectTask } = useStore()
+  const { tasks, users, selectTask } = useStore()
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [showCritical, setShowCritical] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -76,13 +76,11 @@ export default function GanttView() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  // 13-month range: 2 months before → 11 months after
   const rangeStart = new Date(today.getFullYear(), today.getMonth() - 2, 1)
   const rangeEnd   = new Date(today.getFullYear(), today.getMonth() + 11, 0)
   const totalDays  = daysBetween(rangeStart, rangeEnd) + 1
   const totalWidth = totalDays * DAY_W
 
-  // Scroll to ~2 months before today on mount
   useEffect(() => {
     if (scrollRef.current) {
       const todayX = daysBetween(rangeStart, today) * DAY_W
@@ -95,7 +93,6 @@ export default function GanttView() {
   const todayX = daysBetween(rangeStart, today) * DAY_W
   const criticalSet = showCritical ? calcCriticalSet(tasks) : new Set<string>()
 
-  // Build ordered visible rows
   const rows: Task[] = []
   const visit = (task: Task) => {
     rows.push(task)
@@ -111,7 +108,6 @@ export default function GanttView() {
       return next
     })
 
-  // Week ticks — position + date for labels
   const weekTicks: { x: number; date: Date }[] = []
   let wcur = addDays(rangeStart, (7 - rangeStart.getDay()) % 7)
   while (wcur < rangeEnd) {
@@ -119,7 +115,6 @@ export default function GanttView() {
     wcur = addDays(wcur, 7)
   }
 
-  // Bar position helper
   const barPos = (task: Task) => {
     if (!task.startDate || !task.dueDate) return null
     const x  = Math.max(0, daysBetween(rangeStart, new Date(task.startDate))) * DAY_W
@@ -127,10 +122,8 @@ export default function GanttView() {
     return { x, w: Math.max(DAY_W * 0.5, x2 - x) }
   }
 
-  // Row index map for arrows
   const rowIdx = new Map(rows.map((t, i) => [t.id, i]))
 
-  // Build dependency arrows
   type Arrow = { x1: number; y1: number; x2: number; y2: number; critical: boolean }
   const arrows: Arrow[] = []
   if (showCritical) {
@@ -156,25 +149,44 @@ export default function GanttView() {
     }
   }
 
+  // Stats: count leaf tasks by status
+  const counts = { todo: 0, in_progress: 0, review: 0, done: 0 }
+  Object.values(tasks)
+    .filter((t) => t.childIds.length === 0)
+    .forEach((t) => { counts[t.status]++ })
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#0C1219' }}>
 
-      {/* Toolbar */}
+      {/* Toolbar + Stats */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'flex-end',
-          padding: '5px 14px',
+          padding: '0 14px',
+          height: 38,
           background: '#0C1219',
           borderBottom: '1px solid #182840',
           flexShrink: 0,
-          gap: 8,
+          gap: 16,
         }}
       >
-        <span style={{ fontSize: 10, color: '#3A5070', flex: 1 }}>
-          ← → でスクロール　スクロールバーまたはトラックパッドで横移動
-        </span>
+        {/* Status counts */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
+          {STATUS_INFO.map(({ key, label, color }) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: color, flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 11, color: '#4A6A8A' }}>{label}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color }}>
+                {counts[key as keyof typeof counts]}
+              </span>
+            </div>
+          ))}
+        </div>
+
         <button
           onClick={() => setShowCritical((v) => !v)}
           style={{
@@ -196,14 +208,10 @@ export default function GanttView() {
       </div>
 
       {/* Scrollable Gantt body */}
-      <div
-        ref={scrollRef}
-        style={{ flex: 1, overflow: 'auto' }}
-      >
-        {/* Total content area */}
+      <div ref={scrollRef} style={{ flex: 1, overflow: 'auto' }}>
         <div style={{ minWidth: LEFT_W + totalWidth, position: 'relative' }}>
 
-          {/* ── Header row (sticky top) ── */}
+          {/* ── Header (sticky top) ── */}
           <div
             style={{
               display: 'flex',
@@ -215,7 +223,7 @@ export default function GanttView() {
               height: HEAD_H,
             }}
           >
-            {/* Top-left corner: sticky top+left */}
+            {/* Corner: sticky top+left */}
             <div
               style={{
                 width: LEFT_W,
@@ -235,19 +243,19 @@ export default function GanttView() {
             >
               <div style={{ width: NAME_W, flexShrink: 0, padding: '0 10px 6px' }}>タスク名</div>
               <div style={{
+                width: ASSIGN_W, flexShrink: 0, padding: '0 0 6px',
+                textAlign: 'center', borderLeft: '1px solid #182840',
+              }}>担当</div>
+              <div style={{
                 width: STATUS_W, flexShrink: 0, padding: '0 0 6px',
                 textAlign: 'center', borderLeft: '1px solid #182840',
-              }}>ステータス</div>
-              <div style={{
-                width: DATE_W, flexShrink: 0, padding: '0 8px 6px',
-                borderLeft: '1px solid #182840',
-              }}>日付</div>
+              }}>状態</div>
             </div>
 
             {/* Timeline header */}
             <div style={{ position: 'relative', width: totalWidth, height: HEAD_H, flexShrink: 0 }}>
 
-              {/* ── 上段：月ラベル ── */}
+              {/* Month labels */}
               {months.map((m, mi) => {
                 const x = Math.max(0, daysBetween(rangeStart, m)) * DAY_W
                 const daysInM = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate()
@@ -258,8 +266,7 @@ export default function GanttView() {
                     key={m.toISOString()}
                     style={{
                       position: 'absolute',
-                      left: x,
-                      top: 0,
+                      left: x, top: 0,
                       width: daysInM * DAY_W,
                       height: MONTH_H,
                       display: 'flex',
@@ -289,21 +296,18 @@ export default function GanttView() {
                 )
               })}
 
-              {/* 月行・週行の区切り線 */}
               <div style={{ position: 'absolute', left: 0, right: 0, top: MONTH_H, height: 1, background: '#1F3245' }} />
 
-              {/* ── 下段：週ごとの縦線 + 日付ラベル ── */}
+              {/* Week ticks */}
               {weekTicks.map(({ x, date }, i) => {
                 const isThisWeek = today >= date && today < addDays(date, 7)
                 return (
                   <div key={i}>
-                    {/* 縦線 */}
                     <div style={{
                       position: 'absolute',
                       left: x, top: MONTH_H, bottom: 0,
                       width: 1, background: '#1A2A3C',
                     }} />
-                    {/* 日付数字 */}
                     <div style={{
                       position: 'absolute',
                       left: x + 4,
@@ -321,7 +325,7 @@ export default function GanttView() {
                 )
               })}
 
-              {/* ── 今日マーカー（ヘッダー全高 + バッジ）── */}
+              {/* Today marker */}
               {todayX >= 0 && todayX <= totalWidth && (
                 <>
                   <div style={{
@@ -357,20 +361,17 @@ export default function GanttView() {
           {/* ── Task rows ── */}
           <div style={{ position: 'relative' }}>
 
-            {/* Dependency arrows SVG (only when critical path is on) */}
+            {/* Dependency arrows */}
             {showCritical && arrows.length > 0 && (
-              <svg
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: LEFT_W,
-                  width: totalWidth,
-                  height: rows.length * ROW_H,
-                  pointerEvents: 'none',
-                  zIndex: 4,
-                  overflow: 'visible',
-                }}
-              >
+              <svg style={{
+                position: 'absolute',
+                top: 0, left: LEFT_W,
+                width: totalWidth,
+                height: rows.length * ROW_H,
+                pointerEvents: 'none',
+                zIndex: 4,
+                overflow: 'visible',
+              }}>
                 <defs>
                   <marker id="arr-crit" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
                     <path d="M0,1 L7,4 L0,7 Z" fill="#E3423B" />
@@ -400,9 +401,20 @@ export default function GanttView() {
             {rows.map((task) => {
               const pos = barPos(task)
               const isParent = task.childIds.length > 0
-              const isCrit = criticalSet.has(task.id)
+              const isPhase  = task.depth === 0
+              const isCrit   = criticalSet.has(task.id)
               const barColor = isCrit && showCritical ? '#E3423B' : STATUS_COLOR[task.status]
-              const leftBg = isParent ? '#111B26' : '#0C1219'
+
+              const leftBg  = isPhase ? '#141F2E' : isParent ? '#111B26' : '#0C1219'
+              const ganttBg = isPhase ? 'rgba(20,31,46,0.6)' : isParent ? 'rgba(255,255,255,0.008)' : 'transparent'
+
+              const firstAssignee  = task.assigneeIds[0] ? users[task.assigneeIds[0]]  : null
+              const secondAssignee = task.assigneeIds[1] ? users[task.assigneeIds[1]] : null
+
+              // Bar label: show title + first assignee name when bar is wide enough
+              const barLabel = !isParent && pos && pos.w > 44
+                ? (firstAssignee ? `${task.title}・${firstAssignee.name}` : task.title)
+                : null
 
               return (
                 <div
@@ -410,10 +422,10 @@ export default function GanttView() {
                   style={{
                     display: 'flex',
                     height: ROW_H,
-                    borderBottom: '1px solid #182840',
+                    borderBottom: `1px solid ${isPhase ? '#1C2D40' : '#182840'}`,
                   }}
                 >
-                  {/* Left cell: sticky left — 3 sub-columns */}
+                  {/* Left panel */}
                   <div
                     style={{
                       width: LEFT_W,
@@ -429,17 +441,32 @@ export default function GanttView() {
                     }}
                     onClick={() => selectTask(task.id)}
                   >
+                    {/* Phase accent stripe */}
+                    {isPhase && (
+                      <div style={{ width: 3, alignSelf: 'stretch', background: '#2A4870', flexShrink: 0 }} />
+                    )}
+
                     {/* タスク名 */}
                     <div style={{
-                      width: NAME_W, flexShrink: 0,
-                      display: 'flex', alignItems: 'center',
-                      padding: '0 6px 0 10px', gap: 4, overflow: 'hidden',
+                      width: isPhase ? NAME_W - 3 : NAME_W,
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 6px 0 10px',
+                      gap: 4,
+                      overflow: 'hidden',
                     }}>
                       <div style={{ width: task.depth * 14, flexShrink: 0 }} />
 
                       {isParent ? (
                         <span
-                          style={{ color: '#3A5070', display: 'flex', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}
+                          style={{
+                            color: isPhase ? '#5A7A9A' : '#3A5070',
+                            display: 'flex',
+                            alignItems: 'center',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                          }}
                           onClick={(e) => { e.stopPropagation(); toggleCollapse(task.id) }}
                         >
                           {collapsed.has(task.id) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -453,9 +480,10 @@ export default function GanttView() {
                       )}
 
                       <span style={{
-                        fontSize: 11.5,
-                        color: isParent ? '#D0DCF0' : '#7A96B8',
-                        fontWeight: isParent ? 600 : 400,
+                        fontSize: isPhase ? 12 : 11.5,
+                        color: isPhase ? '#C8D8EC' : isParent ? '#D0DCF0' : '#7A96B8',
+                        fontWeight: isPhase ? 700 : isParent ? 600 : 400,
+                        letterSpacing: isPhase ? '0.02em' : 0,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -464,20 +492,80 @@ export default function GanttView() {
                       </span>
                     </div>
 
-                    {/* ステータスバッジ */}
+                    {/* 担当 */}
                     <div style={{
-                      width: STATUS_W, flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: ASSIGN_W,
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 3,
                       borderLeft: '1px solid #182840',
                     }}>
-                      {(() => {
+                      {!isParent && (
+                        <>
+                          {firstAssignee && (
+                            <span
+                              title={firstAssignee.name}
+                              style={{
+                                width: 22, height: 22,
+                                borderRadius: '50%',
+                                background: firstAssignee.avatarColor,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 8,
+                                fontWeight: 700,
+                                color: '#fff',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {firstAssignee.initials}
+                            </span>
+                          )}
+                          {secondAssignee && (
+                            <span
+                              title={secondAssignee.name}
+                              style={{
+                                width: 22, height: 22,
+                                borderRadius: '50%',
+                                background: secondAssignee.avatarColor,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 8,
+                                fontWeight: 700,
+                                color: '#fff',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {secondAssignee.initials}
+                            </span>
+                          )}
+                          {!firstAssignee && (
+                            <span style={{ fontSize: 10, color: '#2A3F55' }}>—</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* 状態バッジ */}
+                    <div style={{
+                      width: STATUS_W,
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderLeft: '1px solid #182840',
+                    }}>
+                      {!isParent && (() => {
                         const b = STATUS_BADGE[task.status]
                         return (
                           <span style={{
                             fontSize: 9.5,
                             fontWeight: 600,
-                            padding: '2px 6px',
-                            borderRadius: 4,
+                            padding: '2px 7px',
+                            borderRadius: 10,
                             background: b.bg,
                             color: b.text,
                             whiteSpace: 'nowrap',
@@ -488,70 +576,36 @@ export default function GanttView() {
                         )
                       })()}
                     </div>
-
-                    {/* 日付 */}
-                    <div style={{
-                      width: DATE_W, flexShrink: 0,
-                      display: 'flex', alignItems: 'center',
-                      padding: '0 8px',
-                      borderLeft: '1px solid #182840',
-                      overflow: 'hidden',
-                    }}>
-                      <span style={{
-                        fontSize: 10,
-                        color: '#4A6A8A',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}>
-                        {task.startDate && task.dueDate
-                          ? `${fmtFull(task.startDate)} → ${fmtFull(task.dueDate)}`
-                          : '—'
-                        }
-                      </span>
-                    </div>
                   </div>
 
-                  {/* Bar cell */}
+                  {/* Gantt bar cell */}
                   <div
                     style={{
                       position: 'relative',
                       width: totalWidth,
                       flexShrink: 0,
                       height: ROW_H,
-                      background: isParent ? 'rgba(255,255,255,0.008)' : 'transparent',
+                      background: ganttBg,
                     }}
                   >
                     {/* Week grid lines */}
                     {weekTicks.map(({ x }, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          bottom: 0,
-                          left: x,
-                          width: 1,
-                          background: '#182840',
-                          pointerEvents: 'none',
-                        }}
-                      />
+                      <div key={i} style={{
+                        position: 'absolute',
+                        top: 0, bottom: 0, left: x,
+                        width: 1, background: '#182840',
+                        pointerEvents: 'none',
+                      }} />
                     ))}
 
                     {/* Today line */}
                     {todayX >= 0 && todayX <= totalWidth && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          bottom: 0,
-                          left: todayX,
-                          width: 1,
-                          background: '#F0A500',
-                          opacity: 0.4,
-                          pointerEvents: 'none',
-                        }}
-                      />
+                      <div style={{
+                        position: 'absolute',
+                        top: 0, bottom: 0, left: todayX,
+                        width: 1, background: '#F0A500', opacity: 0.4,
+                        pointerEvents: 'none',
+                      }} />
                     )}
 
                     {/* Bar */}
@@ -563,17 +617,37 @@ export default function GanttView() {
                           transform: 'translateY(-50%)',
                           left: pos.x,
                           width: pos.w,
-                          height: isParent ? 7 : 15,
-                          borderRadius: 3,
+                          height: isParent ? 6 : 20,
+                          borderRadius: isParent ? 2 : 4,
                           background: barColor,
-                          opacity: isParent ? 0.6 : 0.88,
+                          opacity: isParent ? 0.5 : 0.88,
                           cursor: 'pointer',
                           zIndex: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          overflow: 'hidden',
                           boxShadow: isCrit && showCritical ? `0 0 0 1px ${barColor}55` : 'none',
                         }}
                         onClick={() => selectTask(task.id)}
                         title={`${task.title}\n${fmtDate(task.startDate)} → ${fmtDate(task.dueDate)}`}
-                      />
+                      >
+                        {barLabel && (
+                          <span style={{
+                            fontSize: 9,
+                            fontWeight: 600,
+                            color: 'rgba(255,255,255,0.92)',
+                            paddingLeft: 6,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            lineHeight: 1,
+                            pointerEvents: 'none',
+                            flexShrink: 0,
+                          }}>
+                            {barLabel}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

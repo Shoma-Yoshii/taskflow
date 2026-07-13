@@ -255,20 +255,20 @@ export default function GanttView() {
             <div
               {...handleProps}
               style={{
-                width: 14,
+                width: 18,
                 alignSelf: 'stretch',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 background: '#1A2B3E',
-                borderRight: '2px solid #2A4870',
+                borderRight: '1px solid #2A4870',
                 flexShrink: 0,
                 cursor: 'grab',
-                color: '#2A4870',
+                color: '#6A90B8',
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <GripVertical size={10} />
+              <GripVertical size={13} />
             </div>
           ) : (
             <div style={{ width: 3, alignSelf: 'stretch', flexShrink: 0 }} />
@@ -276,7 +276,7 @@ export default function GanttView() {
 
           {/* タスク名 */}
           <div style={{
-            width: isPhase ? NAME_W - 14 : NAME_W - 3,
+            width: isPhase ? NAME_W - 18 : NAME_W - 3,
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
@@ -496,8 +496,8 @@ export default function GanttView() {
                 fontSize: 10, letterSpacing: '0.07em',
                 textTransform: 'uppercase', color: '#3A5070',
               }}>
-                <div style={{ width: 14, flexShrink: 0 }} />
-                <div style={{ width: NAME_W - 14, flexShrink: 0, padding: '0 10px 6px' }}>タスク名</div>
+                <div style={{ width: 18, flexShrink: 0 }} />
+                <div style={{ width: NAME_W - 18, flexShrink: 0, padding: '0 10px 6px' }}>タスク名</div>
                 <div style={{ width: ASSIGN_W, flexShrink: 0, padding: '0 0 6px', textAlign: 'center', borderLeft: '1px solid #182840' }}>担当</div>
                 <div style={{ width: STATUS_W, flexShrink: 0, padding: '0 0 6px', textAlign: 'center', borderLeft: '1px solid #182840' }}>状態</div>
               </div>
